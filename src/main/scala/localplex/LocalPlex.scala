@@ -1,39 +1,14 @@
 package localplex
 
-import com.twitter.finagle.http.service.RoutingService
-import com.twitter.finagle.{Filter, Http, Service, SimpleFilter}
+import com.twitter.finagle.{Filter, Http, Service}
 import com.twitter.finagle.http.{Request, Response, Status}
 import com.twitter.server.TwitterServer
 import com.twitter.util.{Await, Future}
 
-sealed trait Downstream { def conn: Service[Request, Response] }
-object Downstream {
-  case class HttpServer(name: String, conn: Service[Request, Response]) extends Downstream
-  //case class StaticFiles(host: String, path: String) extends Downstream
-}
-
-case class Db() {
-  var hosts: Map[String,Downstream] = Map.empty
-
-  def get(downstreamName: String): Option[Downstream] =
-    hosts.get(downstreamName)
-
-  def add(downstreamName: String, downstreamAddr: String) = {
-
-    val newConn = Http.client.newService(downstreamAddr, downstreamName)
-    val downstreamServer = Downstream.HttpServer(downstreamName, newConn)
-
-    hosts = hosts + (downstreamName -> downstreamServer)
-  }
-
-  def drop(downstreamName: String) = {
-    hosts = hosts - downstreamName
-  }
-}
 
 object LocalPlex extends TwitterServer {
 
-  case class PlexFilter(db: Db) extends Filter[Request,Response,PlexServiceRequest,Response] {
+  case class PlexFilter(db: Downstream.Db) extends Filter[Request,Response,PlexServiceRequest,Response] {
 
     def apply(req: Request, svc: Service[PlexServiceRequest, Response]): Future[Response] = {
 
@@ -52,58 +27,37 @@ object LocalPlex extends TwitterServer {
 
   case class PlexServiceRequest(req: Request, ds: Downstream)
 
-  case class PlexService(db: Db) extends Service[PlexServiceRequest,Response] {
+  case class PlexService(db: Downstream.Db) extends Service[PlexServiceRequest,Response] {
     def apply(psr: PlexServiceRequest): Future[Response] = {
       val req = psr.req
       val ds  = psr.ds
 
       req.headerMap.remove("Connection")
 
+      log.info(s"${ds.name} => $req")
+
       ds.conn(req)
+        .onSuccess(resp => log.info(s"${ds.name} => $resp"))
+        .onFailure(ex => log.info(s"${ds.name} => $ex"))
     }
   }
 
   def main() {
 
-    val db = Db()
+    val db = Downstream.loadHostFile("/etc/hosts")
 
-    val api = PlexFilter(db) andThen PlexService(db)
+    val port = sys.env.getOrElse("PORT", "1024").toLong
 
-    val addSvc = Service.mk[Request,Response] { req: Request =>
-      val hostname: Option[String] = req.params.get("host")
-      val addr: Option[String]     = req.params.get("addr")
-
-      (hostname, addr) match {
-        case (Some(h), Some(a)) =>
-          db.add(h, a)
-          Future.value(Response(Status.Ok))
-
-        case _ =>
-          Future.value(Response(Status.BadRequest))
-      }
+    db.values.foreach {
+      case Downstream.HttpServer(host, proxy) => log.info(s"http://$host:$port pointing to $proxy")
     }
 
-    val dropSvc = Service.mk[Request,Response] { req: Request =>
-      req.params.get("host") match {
-        case Some(h) =>
-          db.drop(h)
-          Future.value(Response(Status.Ok))
-
-        case _ =>
-          Future.value(Response(Status.BadRequest))
-      }
-    }
-
-    val router = RoutingService.byPath[Request] {
-      case "/lp/add"  => addSvc
-      case "/lp/drop" => dropSvc
-      case _          => api
-    }
+    val service = PlexFilter(db) andThen PlexService(db)
 
     val server = Http.server
       .withStatsReceiver(statsReceiver)
       .withLabel("local-plex-router")
-      .serve(s":${sys.env.getOrElse("PORT", "3333")}", router)
+      .serve(s":$port", service)
 
     onExit {
       server.close()
