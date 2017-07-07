@@ -27,7 +27,7 @@ object LocalPlex extends TwitterServer {
 
   case class PlexServiceRequest(req: Request, ds: Downstream)
 
-  case class PlexService(db: Downstream.Db) extends Service[PlexServiceRequest,Response] {
+  case object PlexService extends Service[PlexServiceRequest,Response] {
     def apply(psr: PlexServiceRequest): Future[Response] = {
       val req = psr.req
       val ds  = psr.ds
@@ -52,7 +52,7 @@ object LocalPlex extends TwitterServer {
       case Downstream.HttpServer(host, proxy) => log.info(s"http://$host:$port pointing to $proxy")
     }
 
-    val service = PlexFilter(db) andThen PlexService(db)
+    val service = PlexFilter(db) andThen PlexService
 
     val server = Http.server
       .withStatsReceiver(statsReceiver)
