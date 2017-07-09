@@ -8,11 +8,11 @@ import com.twitter.util.{Await, Future}
 
 object LocalPlex extends TwitterServer {
 
-  case class PlexFilter(db: Downstream.Db) extends Filter[Request,Response,PlexServiceRequest,Response] {
+  case class PlexFilter(db: Endpoint.Db) extends Filter[Request,Response,PlexServiceRequest,Response] {
 
     def apply(req: Request, svc: Service[PlexServiceRequest, Response]): Future[Response] = {
 
-      val maybeDs: Option[Downstream] = req.headerMap
+      val maybeDs: Option[Endpoint] = req.headerMap
         .get("Host")
         .map(_.takeWhile(_ != ':'))
         .flatMap(db.get)
@@ -25,7 +25,7 @@ object LocalPlex extends TwitterServer {
     }
   }
 
-  case class PlexServiceRequest(req: Request, ds: Downstream)
+  case class PlexServiceRequest(req: Request, ds: Endpoint)
 
   case object PlexService extends Service[PlexServiceRequest,Response] {
     def apply(psr: PlexServiceRequest): Future[Response] = {
@@ -44,12 +44,12 @@ object LocalPlex extends TwitterServer {
 
   def main() {
 
-    val db = Downstream.loadHostFile("/etc/hosts")
+    val db = Endpoint.loadHostFile("/etc/hosts")
 
     val port = sys.env.getOrElse("PORT", "1024").toLong
 
     db.values.foreach {
-      case Downstream.HttpServer(host, proxy) => log.info(s"http://$host:$port pointing to $proxy")
+      case Endpoint(host, proxy) => log.info(s"http://$host:$port pointing to $proxy")
     }
 
     val service = PlexFilter(db) andThen PlexService

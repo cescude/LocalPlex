@@ -3,20 +3,15 @@ package localplex
 import com.twitter.finagle.{Http, Service}
 import com.twitter.finagle.http.{Request, Response}
 
-sealed trait Downstream {
-  def name: String
-  def conn: Service[Request, Response]
-}
-object Downstream {
-  case class HttpServer(name: String, proxy: String) extends Downstream {
-    val conn: Service[Request, Response] = {
-      Http.client.newService(proxy, name)
-    }
+case class Endpoint(name: String, proxyAddr: String) {
+  val conn: Service[Request, Response] = {
+    Http.client.newService(proxyAddr, name)
   }
-  //case class StaticFiles(host: String, path: String) extends Downstream
+}
 
+object Endpoint {
 
-  type Db = Map[String, Downstream]
+  type Db = Map[String, Endpoint]
 
   /** SYNOPSIS
     *
@@ -49,7 +44,7 @@ object Downstream {
     scala.io.Source.fromFile(hostFile).getLines
       .collect({
         case httpServerPattern(hostname, remoteaddr) =>
-          (hostname -> Downstream.HttpServer(hostname, remoteaddr))
+          (hostname -> Endpoint(hostname, remoteaddr))
       })
       .toMap
   }
