@@ -8,19 +8,33 @@ import com.twitter.util.{Await, Future}
 
 object LocalPlex extends TwitterServer {
 
-  case class PlexFilter(db: Endpoint.Db) extends Filter[Request,Response,PlexServiceRequest,Response] {
+  case class UnknownHost(staticPage: String) extends Service[Request,Response] {
+
+    val cannedResponse = {
+      val resp = Response(Status.Ok)
+      resp.contentString = staticPage
+      resp
+    }
+
+    def apply(req: Request): Future[Response] =
+      Future.value(cannedResponse)
+  }
+
+  case class PlexFilter(db: Endpoint.Db, missingService: UnknownHost) extends Filter[Request,Response,PlexServiceRequest,Response] {
 
     def apply(req: Request, svc: Service[PlexServiceRequest, Response]): Future[Response] = {
 
-      val maybeDs: Option[Endpoint] = req.headerMap
+      val maybeEndpoint: Option[Endpoint] = req.headerMap
         .get("Host")
         .map(_.takeWhile(_ != ':'))
         .flatMap(db.get)
 
-      maybeDs match {
-        case Some(ds) => svc(PlexServiceRequest(req, ds))
+      maybeEndpoint match {
+        case Some(ds) =>
+          svc(PlexServiceRequest(req, ds))
+
         case None =>
-          Future.value(Response(Status.BadRequest))
+          missingService(req)
       }
     }
   }
@@ -42,6 +56,20 @@ object LocalPlex extends TwitterServer {
     }
   }
 
+  def missingServicePage(db: Endpoint.Db, localPort: Long): String = {
+    s"""<html>
+       |<head></head>
+       |<body>
+       |  ${
+      db.values.map {
+        case Endpoint(host, proxyaddr) =>
+          s"""<a href="http://$host:$localPort">$host ($proxyaddr)</a>"""
+      }.mkString("<p>", "</p><p>", "</p>")
+    }
+       |</body>
+       |</html>""".stripMargin
+  }
+
   def main() {
 
     val db = Endpoint.loadHostFile("/etc/hosts")
@@ -52,7 +80,9 @@ object LocalPlex extends TwitterServer {
       case Endpoint(host, proxy) => log.info(s"http://$host:$port pointing to $proxy")
     }
 
-    val service = PlexFilter(db) andThen PlexService
+    val unknownHostService = UnknownHost(missingServicePage(db, port))
+
+    val service = PlexFilter(db, unknownHostService) andThen PlexService
 
     val server = Http.server
       .withStatsReceiver(statsReceiver)
