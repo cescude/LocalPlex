@@ -21,7 +21,7 @@ Configuring
 
 Add lines to your `/etc/hosts` file with the following syntax:
 
-    127.0.0.1 <memorable-name> # LocalPlex:localhost:<port>
+    127.0.0.1 <memorable-name> # LocalPlex:http://localhost:<port>
 
 The comment after the `#` signals that traffic to `<memorable-name>` should be
 proxied to `localhost:<port>`.
@@ -29,18 +29,18 @@ proxied to `localhost:<port>`.
 So, for example, if you have a rails server running locally on port 3000, type
 this:
 
-    127.0.0.1 my-ticket-number.dev # LocalPlex:localhost:3000
+    127.0.0.1 my-ticket-number.dev # LocalPlex:http://localhost:3000
 
 If you also have a static HTTP server running on port 9999 (e.g. node's
 `http-server -p 9999`), include this:
 
-    127.0.0.1 demo-files # LocalPlex:localhost:9999
+    127.0.0.1 demo-files # LocalPlex:http://localhost:9999
 
 If, by chance, you've got a binary with a hardcoded endpoint that you want to
 intercept & write a shim for, start your intercepting server on (e.g.) port 4500
 and include this:
 
-    127.0.0.1 replay-service-shim # LocalPlex:localhost:4500
+    127.0.0.1 replay-service-shim # LocalPlex:http://localhost:4500
 
 Upon starting LocalPlex, it will grab these three entries (ignoring everything
 else) and begin routing HTTP traffic to the specified endpoints.
@@ -80,7 +80,7 @@ Admin console
 You can access the standard finagle stats browser via `localhost:9990`...or, by
 adding the following line to `/etc/hosts`:
 
-    127.0.0.1 localplex-admin # LocalPlex:localhost:9990
+    127.0.0.1 localplex-admin # LocalPlex:http://localhost:9990
 
 Development server
 ==================
