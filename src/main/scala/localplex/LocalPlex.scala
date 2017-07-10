@@ -1,9 +1,8 @@
 package localplex
 
-import com.twitter.finagle.{Filter, Http, Service}
-import com.twitter.finagle.http.{Request, Response, Status}
+import com.twitter.finagle.Http
 import com.twitter.server.TwitterServer
-import com.twitter.util.{Await, Future}
+import com.twitter.util.Await
 
 
 object LocalPlex extends TwitterServer {

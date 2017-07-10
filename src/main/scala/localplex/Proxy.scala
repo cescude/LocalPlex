@@ -1,15 +1,14 @@
 package localplex
 
 import com.twitter.finagle.{Filter, Service}
-import com.twitter.finagle.http
-import com.twitter.finagle.http.{Request, Response}
+import com.twitter.finagle.http.{Request, Response, Status}
 import com.twitter.util.Future
 import localplex.LocalPlex.log
 
 object Proxy {
 
-  case class Args(requestPayload: http.Request, endpoint: Endpoint)
-  case class Result(responsePayload: http.Response)
+  case class Args(requestPayload: Request, endpoint: Endpoint)
+  case class Result(responsePayload: Response)
 
   def makeForwardingService(db: Endpoint.Db, missingMessage: String): Service[Request,Response] =
     HttpCodec(db, missingMessage) andThen ForwardingService
@@ -31,7 +30,7 @@ object Proxy {
             .map(_.responsePayload)
 
         case None =>
-          val resp = http.Response(http.Status.Ok)
+          val resp = Response(Status.Ok)
           resp.contentType = "text/plain"
           resp.contentString = missingMessage
           Future.value(resp)
